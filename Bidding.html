@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bidding</title>
+  <meta name="description" content="" />
+  <style>
+    :root { --bg: #f6f0e6; --ink: #1f2937; --gold: #c2a062; --red: #b91c1c; --overlay: rgba(0,0,0,.5); }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #efeae3; font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", sans-serif; color: var(--ink); }
+    .container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+    .scroll { width: min(900px, 95vw); background: var(--bg); position: relative; padding: 24px 24px 32px; border-left: 8px solid var(--gold); border-right: 8px solid var(--gold); box-shadow: 0 20px 60px rgba(0,0,0,.12); }
+    .rod { height: 20px; background: var(--gold); box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
+    .rod.top { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+    .rod.bottom { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+    .content { padding: 16px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; position: relative; }
+    .left img { width: 100%; height: auto; border-radius: 12px; border: 2px solid #ddd; background: #fff; }
+    .title { font-size: 28px; font-weight: 800; letter-spacing: .05em; margin: 4px 0 12px; }
+    .meta { display: grid; gap: 10px; }
+    .meta div { font-size: 16px; }
+    .price { font-size: 36px; font-weight: 800; }
+    .price .unit { font-size: 18px; opacity: .6; margin-left: 6px; }
+    .countdown { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 700; color: var(--red); }
+    .muted { opacity: .7; font-size: 12px; }
+
+    .tip { margin-top: 8px; font-size: 12px; opacity: .7; }
+
+    .settings-btn { position: absolute; top: -12px; right: -12px; background: var(--ink); color: #fff; border: 0; border-radius: 999px; width: 42px; height: 42px; display: grid; place-items: center; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+    .settings-btn:hover { transform: translateY(-1px); }
+
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: var(--overlay); padding: 16px; z-index: 50; }
+    .modal .panel { width: min(720px, 95vw); background: #fff; border-radius: 14px; padding: 16px 16px 20px; box-shadow: 0 30px 80px rgba(0,0,0,.25); }
+    .panel h3 { margin: 4px 0 12px; font-size: 20px; }
+    .grid { display: grid; gap: 10px; }
+    .row { display: grid; grid-template-columns: 140px 1fr; gap: 10px; align-items: center; }
+    input[type="text"], input[type="number"], input[type="datetime-local"] { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; }
+    input[type="file"] { width: 100%; }
+    .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+    .btn { cursor: pointer; padding: 10px 14px; border: 0; border-radius: 10px; font-weight: 700; }
+    .btn.primary { background: var(--ink); color: #fff; }
+    .btn.ghost { background: transparent; color: var(--ink); border: 1px solid #333; }
+    .preview { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; }
+    .preview img { width: 120px; height: auto; border-radius: 8px; border: 1px solid #ddd; }
+
+    @media (max-width: 820px) { .content { grid-template-columns: 1fr; } .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="scroll">
+      <div class="rod top"></div>
+      <div class="content">
+        <button id="btnSettings" class="settings-btn" title="設置" aria-label="設置">⚙️</button>
+        <div class="left">
+          <div class="title" id="title">掛軸競標</div>
+          <img id="image" alt="競標圖片" src="" />
+        </div>
+        <div class="right">
+          <div class="meta">
+            <div>目前出價：</div>
+            <div class="price"><span id="price">0</span><span class="unit">元</span></div>
+            <div>出價人：<b id="bidder">—</b></div>
+            <div>結束倒數：<span class="countdown" id="countdown">--:--:--</span></div>
+            <div class="muted">結束時間（ISO）：<span id="endTime">—</span></div>
+          </div>
+          <p class="tip">純前端顯示。可用右上角「設置」上傳圖片與修改內容；也支援 URL 參數與外部 JSON（?json=）。</p>
+        </div>
+      </div>
+      <div class="rod bottom"></div>
+    </div>
+  </div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="panel">
+      <h3 id="modalTitle">設置</h3>
+      <div class="grid">
+        <div class="row"><label for="m_title">標題</label><input type="text" id="m_title" placeholder="掛軸標題" /></div>
+        <div class="row"><label for="m_price">目前價格</label><input type="number" id="m_price" placeholder="1000" min="0" step="1" /></div>
+        <div class="row"><label for="m_bidder">出價人</label><input type="text" id="m_bidder" placeholder="例如：王小明" /></div>
+        <div class="row"><label for="m_end">結束時間</label><input type="datetime-local" id="m_end" /></div>
+        <div class="row"><label for="m_imageFile">上傳圖片</label><input type="file" id="m_imageFile" accept="image/*" /></div>
+        <div class="row"><label for="m_imageUrl">圖片網址（選填）</label><input type="text" id="m_imageUrl" placeholder="https://..." /></div>
+        <div class="preview"><img id="m_preview" alt="預覽" /><div class="muted">會優先採用上傳的圖片（轉為本地 Data URL），否則用圖片網址。</div></div>
+      </div>
+      <div class="btns">
+        <button class="btn ghost" id="btnCancel">取消</button>
+        <button class="btn primary" id="btnSave">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="application/json" id="default-state">
+    {
+      "title": "掛軸競標（範例）",
+      "imageUrl": "https://images.unsplash.com/photo-1549880338-65ddcdfd017b?w=1200",
+      "currentPrice": 1000,
+      "bidder": "來賓",
+      "endTimeIso": "2030-01-01T20:00:00+08:00"
+    }
+  </script>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const fmt2 = n => n.toString().padStart(2, '0');
+    const parseNum = v => { const n = Number(v); return Number.isFinite(n) ? n : undefined; };
+
+    function getQuery() { return new URLSearchParams(location.search); }
+
+    function overWriteByQuery(state) {
+      const q = getQuery();
+      const title = q.get('title');
+      const imageUrl = q.get('imageUrl') || q.get('img');
+      const price = q.get('price');
+      const bidder = q.get('bidder');
+      const end = q.get('end') || q.get('endTimeIso');
+      if (title) state.title = title;
+      if (imageUrl) state.imageUrl = imageUrl;
+      if (price !== null && price !== undefined) { const n = parseNum(price); if (n !== undefined) state.currentPrice = n; }
+      if (bidder) state.bidder = bidder;
+      if (end) state.endTimeIso = end;
+      return state;
+    }
+
+    async function loadExternalJsonIfAny() {
+      const q = getQuery();
+      const url = q.get('json');
+      if (!url) return null;
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch json failed');
+        return await res.json();
+      } catch (e) { console.warn('[外部 JSON 載入失敗]', e); return null; }
+    }
+
+    const LS_KEY = 'auctionState_v1';
+    function saveToLS(state) { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(_){} }
+    function loadFromLS() { try { const s = localStorage.getItem(LS_KEY); return s ? JSON.parse(s) : null; } catch(_) { return null; } }
+
+    let timer = null;
+    function startCountdown(endIso) {
+      if (timer) clearInterval(timer);
+      function tick() {
+        if (!endIso) { $('countdown').textContent = '--:--:--'; return; }
+        const end = new Date(endIso);
+        const now = new Date();
+        let ms = end - now;
+        if (!Number.isFinite(ms)) { $('countdown').textContent = '--:--:--'; return; }
+        if (ms <= 0) { $('countdown').textContent = '已結束'; return; }
+        const s = Math.floor(ms / 1000);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        $('countdown').textContent = `${fmt2(h)}:${fmt2(m)}:${fmt2(sec)}`;
+      }
+      tick();
+      timer = setInterval(tick, 1000);
+    }
+
+    function render(state) {
+      $('title').textContent = state.title || '掛軸競標';
+      $('image').src = state.imageUrl || '';
+      $('price').textContent = (state.currentPrice ?? 0).toLocaleString();
+      $('bidder').textContent = state.bidder || '—';
+      $('endTime').textContent = state.endTimeIso || '—';
+      startCountdown(state.endTimeIso);
+    }
+
+    function fillModal(state) {
+      $('m_title').value = state.title || '';
+      $('m_price').value = state.currentPrice ?? '';
+      $('m_bidder').value = state.bidder || '';
+      if (state.endTimeIso) {
+        const dt = new Date(state.endTimeIso);
+        const local = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+        $('m_end').value = local;
+      } else {
+        $('m_end').value = '';
+      }
+      $('m_imageUrl').value = state.imageUrl || '';
+      $('m_preview').src = state.imageUrl || '';
+    }
+
+    function openModal() { $('modal').style.display = 'flex'; }
+    function closeModal() { $('modal').style.display = 'none'; }
+
+    // 圖片檔案 -> Data URL
+    function handleFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function bootstrap() {
+      let state = {};
+      try { state = JSON.parse(document.getElementById('default-state').textContent); } catch (e) { console.error('default-state JSON 解析失敗'); }
+
+      const ls = loadFromLS();
+      if (ls) state = { ...state, ...ls };
+
+      const ext = await loadExternalJsonIfAny();
+      if (ext && typeof ext === 'object') state = { ...state, ...ext };
+
+      state = overWriteByQuery(state);
+
+      document.getElementById('btnSettings').addEventListener('click', () => {
+        fillModal(state);
+        openModal();
+        setTimeout(() => document.getElementById('m_title').focus(), 0);
+      });
+      document.getElementById('btnCancel').addEventListener('click', closeModal);
+
+      document.getElementById('m_imageFile').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          const dataUrl = await handleFile(file);
+          document.getElementById('m_preview').src = dataUrl;
+        } catch (err) { console.error(err); }
+      });
+      document.getElementById('m_imageUrl').addEventListener('input', (e) => {
+        const v = e.target.value.trim();
+        if (v) document.getElementById('m_preview').src = v;
+      });
+
+      document.getElementById('btnSave').addEventListener('click', async () => {
+        const title = document.getElementById('m_title').value.trim();
+        const price = document.getElementById('m_price').value;
+        const bidder = document.getElementById('m_bidder').value.trim();
+        const endLocal = document.getElementById('m_end').value; // local time
+        const file = document.getElementById('m_imageFile').files && document.getElementById('m_imageFile').files[0];
+        const imageUrlInput = document.getElementById('m_imageUrl').value.trim();
+
+        const patch = {};
+        if (title) patch.title = title; else patch.title = '';
+        if (price !== '' && price !== null) { const n = Number(price); if (!Number.isNaN(n) && n >= 0) patch.currentPrice = n; }
+        if (bidder) patch.bidder = bidder; else patch.bidder = '';
+        if (endLocal) { patch.endTimeIso = new Date(endLocal).toISOString(); } else { patch.endTimeIso = ''; }
+
+        if (file) {
+          try { patch.imageUrl = await handleFile(file); } catch {}
+        } else if (imageUrlInput) {
+          patch.imageUrl = imageUrlInput;
+        } else {
+          patch.imageUrl = '';
+        }
+
+        state = { ...state, ...patch };
+        saveToLS(state);
+        render(state);
+        closeModal();
+      });
+
+      render(state);
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
